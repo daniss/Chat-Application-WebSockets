@@ -8,10 +8,17 @@ import (
 	"os"
 )
 
+type Message struct {
+	Username string `json:"username"`
+	Content  string `json:"content"`
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
+
+var clients = make(map[*websocket.Conn]bool)
 
 func helloHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Hello, World!"))
@@ -23,13 +30,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Error upgrading connection: %s\n", err)
 		return
 	}
+	clients[conn] = true
 	defer conn.Close()
 	for {
 		messageType, p, err := conn.ReadMessage()
-		fmt.Printf("Received message: %s\n", p)
 		if err != nil {
 			fmt.Printf("Error reading message: %s\n", err)
 			return
+		}
+		for client := range clients {
+			if client != conn {
+				err = client.WriteMessage(messageType, p)
+				if err != nil {
+					fmt.Printf("Error writing message: %s\n", err)
+					return
+				}
+			}
 		}
 		err = conn.WriteMessage(messageType, p)
 		if err != nil {
